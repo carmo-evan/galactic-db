@@ -19,18 +19,20 @@ func getSpaceshipRoute(s db.Store) func(w http.ResponseWriter, r *http.Request) 
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("id is required")))
 			return
 		}
-		sp, err := s.GetSpaceship(id)
+		dto, err := s.GetSpaceship(id)
+		if err != nil {
+			log.Println(id)
+			render.Render(w, r, ServerErrorRenderer(fmt.Errorf("error retrieiving value from DB")))
+			return
+		}
+		sp, err := db.ParseSpaceshipDTO(dto)
 		if err != nil {
 			log.Println(err)
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("could not find spaceship")))
 			return
 		}
-		armaments, err := s.GetArmaments(id)
-		if err != nil {
-			log.Println(err)
-		}
-		spaceship := db.Spaceship{SpaceshipDTO: sp, Armament: armaments}
-		render.JSON(w, r, spaceship)
+
+		render.JSON(w, r, sp)
 	}
 }
 
@@ -40,12 +42,6 @@ func deleteSpaceshipRoute(s db.Store) func(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			log.Println(id)
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("id is required")))
-			return
-		}
-		err = s.DeleteArmaments(id)
-		if err != nil {
-			log.Println(err)
-			render.Render(w, r, ErrorRenderer(fmt.Errorf("could not delete armaments")))
 			return
 		}
 		err = s.DeleteSpaceship(id)
@@ -82,25 +78,22 @@ func createSpaceshipRoute(s db.Store) func (w http.ResponseWriter, r *http.Reque
 		var sp db.Spaceship
 		err := json.NewDecoder(r.Body).Decode(&sp)
 		if err != nil {
+			log.Println(err)
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid body")))
 			return
 		}
-		id, err := s.InsertSpaceship(sp.SpaceshipDTO)
+		dto, err := db.CreateSpaceshipDTO(sp)
+		if err != nil {
+			log.Println(err)
+			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid body")))
+			return
+		}
+		id, err := s.InsertSpaceship(dto)
 		sp.Id = id
 		if err != nil {
 			log.Println(err)
 			render.Render(w, r, ServerErrorRenderer(fmt.Errorf("could not save spaceships")))
 			return
-		}
-		for _, ar := range sp.Armament {
-			ar.SpaceshipId = sp.Id
-			log.Println(ar)
-			err = s.InsertArmament(ar)
-			if err != nil {
-				log.Println(err)
-				render.Render(w, r, ServerErrorRenderer(fmt.Errorf("could not save armaments")))
-				return
-			}
 		}
 
 		response := SuccessResponse{
@@ -118,22 +111,19 @@ func updateSpaceshipRoute(s db.Store) func (w http.ResponseWriter, r *http.Reque
 			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid body")))
 			return
 		}
-		err = s.UpdateSpaceship(sp.SpaceshipDTO)
+		dto, err := db.CreateSpaceshipDTO(sp)
+		log.Println("dto", dto)
+		if err != nil {
+			render.Render(w, r, ErrorRenderer(fmt.Errorf("invalid body")))
+			return
+		}
+		err = s.UpdateSpaceship(dto)
 		if err != nil {
 			log.Println(err)
 			render.Render(w, r, ServerErrorRenderer(fmt.Errorf("could not save spaceships")))
 			return
 		}
-		for _, ar := range sp.Armament {
-			ar.SpaceshipId = sp.Id
-			log.Println(ar)
-			err = s.UpdateArmament(ar)
-			if err != nil {
-				log.Println(err)
-				render.Render(w, r, ServerErrorRenderer(fmt.Errorf("could not save armaments")))
-				return
-			}
-		}
+
 		response := SuccessResponse{
 			Success: true,
 		}
